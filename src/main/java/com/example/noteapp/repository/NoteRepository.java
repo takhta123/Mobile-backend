@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface NoteRepository extends JpaRepository<Note, Long> {
@@ -48,4 +49,20 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    // --- CÁC HÀM TỐI ƯU MỚI TÌM THEO EMAIL ---
+    Optional<Note> findByIdAndUserEmail(Long id, String email);
+
+    Page<Note> findByUserEmailAndIsDeletedFalseAndIsArchivedFalse(String email, Pageable pageable);
+
+    Page<Note> findByUserEmailAndIsArchivedTrueAndIsDeletedFalse(String email, Pageable pageable);
+
+    Page<Note> findByUserEmailAndIsDeletedTrue(String email, Pageable pageable);
+
+    Page<Note> findByUserEmailAndReminderIsNotNullAndIsDeletedFalse(String email, Pageable pageable);
+
+    @Query("SELECT n FROM Note n WHERE n.user.email = :email AND n.isDeleted = false AND " +
+            "(LOWER(n.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+            "LOWER(CAST(n.content AS String)) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+    Page<Note> searchNotesByEmail(@Param("email") String email, @Param("keyword") String keyword, Pageable pageable);
 }

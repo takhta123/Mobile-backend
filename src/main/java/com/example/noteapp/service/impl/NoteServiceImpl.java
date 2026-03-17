@@ -30,25 +30,6 @@ public class NoteServiceImpl implements NoteService {
     private final LabelRepository labelRepository;
     private final FileStorageService fileStorageService;
 
-    private User getCurrentUser() {
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        return userRepository.findByEmail(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-    }
-
-    // 2. Lấy Note theo ID và kiểm tra xem User hiện tại có phải chủ sở hữu không
-    private Note getNoteAndCheckOwner(Long id) {
-        Note note = noteRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Note not found"));
-
-        User currentUser = getCurrentUser();
-
-        if (!note.getUser().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Unauthorized access to note");
-        }
-        return note;
-    }
-
     @Override
     @Transactional
     public Note createNote(String email, NoteRequest request) {
@@ -72,34 +53,27 @@ public class NoteServiceImpl implements NoteService {
     @Override
     @Transactional(readOnly = true)
     public Page<Note> getAllNotes(String email, int page, int size, String search) {
-        User user = getUserByEmail(email);
-
-        Pageable pageable = PageRequest.of(page, size,
-                Sort.by(Sort.Order.desc("isPinned"), Sort.Order.desc("createdAt"))); // <--- Đổi updatedAt thành createdAt
-
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("isPinned"), Sort.Order.desc("createdAt")));
         if (search != null && !search.trim().isEmpty()) {
-            return noteRepository.searchNotes(user.getId(), search.trim(), pageable);
+            return noteRepository.searchNotesByEmail(email, search.trim(), pageable);
         }
-
-        return noteRepository.findByUserIdAndIsDeletedFalseAndIsArchivedFalse(user.getId(), pageable);
+        return noteRepository.findByUserEmailAndIsDeletedFalseAndIsArchivedFalse(email, pageable);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<Note> getArchivedNotes(int page, int size) {
-        User user = getCurrentUser(); // Hàm helper lấy user hiện tại
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
         Pageable pageable = PageRequest.of(page, size, Sort.by("updatedAt").descending());
-        return noteRepository.findByUserIdAndIsArchivedTrueAndIsDeletedFalse(user.getId(), pageable);
+        return noteRepository.findByUserEmailAndIsArchivedTrueAndIsDeletedFalse(email, pageable);
     }
 
-    // [MỚI] Lấy danh sách Thùng rác
     @Override
     @Transactional(readOnly = true)
     public Page<Note> getTrashedNotes(int page, int size) {
-        User user = getCurrentUser();
-        // Thùng rác thường sắp xếp theo ngày xóa (updatedAt)
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
         Pageable pageable = PageRequest.of(page, size, Sort.by("updatedAt").descending());
-        return noteRepository.findByUserIdAndIsDeletedTrue(user.getId(), pageable);
+        return noteRepository.findByUserEmailAndIsDeletedTrue(email, pageable);
     }
 
     @Override
@@ -116,15 +90,9 @@ public class NoteServiceImpl implements NoteService {
 
     @Override
     public Note getNoteById(Long noteId, String email) {
-        User user = getUserByEmail(email);
-        Note note = noteRepository.findById(noteId)
-                .orElseThrow(() -> new RuntimeException("Ghi chú không tồn tại"));
-
-        // Kiểm tra quyền sở hữu (Bảo mật)
-        if (!note.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("Bạn không có quyền truy cập ghi chú này");
-        }
-        return note;
+        // Tối ưu: Tìm thẳng Note bằng ID và Email. Nếu không có nghĩa là Note không tồn tại, HOẶC user không có quyền.
+        return noteRepository.findByIdAndUserEmail(noteId, email)
+                .orElseThrow(() -> new RuntimeException("Ghi chú không tồn tại hoặc bạn không có quyền truy cập"));
     }
 
     @Override
@@ -279,11 +247,7 @@ public class NoteServiceImpl implements NoteService {
     @Override
     @Transactional(readOnly = true)
     public Page<Note> getNotesWithReminders(String email, int page, int size) {
-        User user = getUserByEmail(email); // Hàm helper cũ
-
-        // Sắp xếp: Ghi chú nào sắp đến hạn thì hiện lên đầu (reminder ASC)
         Pageable pageable = PageRequest.of(page, size, Sort.by("reminder").ascending());
-
-        return noteRepository.findByUserIdAndReminderIsNotNullAndIsDeletedFalse(user.getId(), pageable);
+        return noteRepository.findByUserEmailAndReminderIsNotNullAndIsDeletedFalse(email, pageable);
     }
 }
