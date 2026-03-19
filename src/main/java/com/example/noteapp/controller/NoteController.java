@@ -36,9 +36,6 @@ public class NoteController {
         return new ApiResponse<>(1000, "Danh sách ghi chú", notes);
     }
 
-    // --- ĐÃ XÓA ĐOẠN @GetMapping("/search") GÂY LỖI ---
-    // Lý do: Logic tìm kiếm đã được gộp vào API @GetMapping ở trên.
-
     @PostMapping
     @Operation(summary = "Tạo ghi chú mới", description = "Tạo một ghi chú mới với tiêu đề, nội dung, màu sắc...")
     public ApiResponse<Note> createNote(@RequestBody NoteRequest request, Principal principal) {
